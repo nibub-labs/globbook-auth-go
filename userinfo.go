@@ -53,12 +53,30 @@ type UserInfo struct {
 	// Website is the user's website URL, or "" if unset.
 	Website string `json:"website"`
 
-	// Birthdate is the user's birthdate in YYYY-MM-DD format, or "" if
-	// unset.
-	Birthdate string `json:"birthdate"`
+	// Birthdate, Gender, PhoneNumber, and Address are restricted claims.
+	// Globbook only includes them in the response — the JSON key is
+	// omitted entirely otherwise — when BOTH of the following are true:
+	//   1. Your app has been verified in the Globbook Developer Console.
+	//   2. The user granted the matching scope ("birthdate", "gender",
+	//      "phone", "address") on the consent screen during authorization.
+	// An unverified app never receives these fields, regardless of which
+	// scopes it requests or what the user approves. Check for nil before
+	// use — a nil pointer means "not available," not "empty."
+	Birthdate *string `json:"birthdate,omitempty"`
 
-	// Gender is the user's gender, or "" if unset.
-	Gender string `json:"gender"`
+	// Gender is the user's gender. See the Birthdate doc comment above for
+	// when this field is populated vs. nil.
+	Gender *string `json:"gender,omitempty"`
+
+	// PhoneNumber is the user's phone number. See the Birthdate doc
+	// comment above for when this field is populated vs. nil.
+	PhoneNumber *string `json:"phone_number,omitempty"`
+
+	// Address is city + country, space-joined ("" halves omitted) — this
+	// platform stores no street-level address, so this is not a full
+	// postal address. See the Birthdate doc comment above for when this
+	// field is populated vs. nil.
+	Address *string `json:"address,omitempty"`
 }
 
 // GetUserInfo fetches the authenticated user's profile (step 3 of the

@@ -69,7 +69,7 @@ func TestAuthorizationURL(t *testing.T) {
 		t.Fatalf("New() unexpected error: %v", err)
 	}
 
-	got := c.AuthorizationURL()
+	got := c.AuthorizationURL(AuthorizationURLOptions{})
 	want := DefaultBaseURL + "/api/v2/oauth/authorize?client_id=abc+123"
 	if got != want {
 		t.Errorf("AuthorizationURL() = %q, want %q", got, want)
@@ -84,10 +84,65 @@ func TestAuthorizationURL_CustomBaseURL(t *testing.T) {
 		t.Fatalf("New() unexpected error: %v", err)
 	}
 
-	got := c.AuthorizationURL()
+	got := c.AuthorizationURL(AuthorizationURLOptions{})
 	want := "https://staging.globbook.com/api/v2/oauth/authorize?client_id=client-123"
 	if got != want {
 		t.Errorf("AuthorizationURL() = %q, want %q", got, want)
+	}
+}
+
+func TestAuthorizationURL_WithScopes(t *testing.T) {
+	c, err := New(validConfig())
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+
+	got := c.AuthorizationURL(AuthorizationURLOptions{Scopes: []string{ScopeBirthdate, ScopeGender}})
+	want := DefaultBaseURL + "/api/v2/oauth/authorize?client_id=client-123&scope=birthdate+gender"
+	if got != want {
+		t.Errorf("AuthorizationURL(Scopes) = %q, want %q", got, want)
+	}
+}
+
+func TestAuthorizationURL_NoScopesMatchesZeroValueOptions(t *testing.T) {
+	c, err := New(validConfig())
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+
+	got := c.AuthorizationURL(AuthorizationURLOptions{Scopes: []string{}})
+	want := c.AuthorizationURL(AuthorizationURLOptions{})
+	if got != want {
+		t.Errorf("AuthorizationURL() with empty scopes = %q, want equal to zero-value options %q", got, want)
+	}
+}
+
+func TestAuthorizationURL_WithState(t *testing.T) {
+	c, err := New(validConfig())
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+
+	got := c.AuthorizationURL(AuthorizationURLOptions{State: "csrf-token-123"})
+	want := DefaultBaseURL + "/api/v2/oauth/authorize?client_id=client-123&state=csrf-token-123"
+	if got != want {
+		t.Errorf("AuthorizationURL(State) = %q, want %q", got, want)
+	}
+}
+
+func TestAuthorizationURL_WithScopesAndState(t *testing.T) {
+	c, err := New(validConfig())
+	if err != nil {
+		t.Fatalf("New() unexpected error: %v", err)
+	}
+
+	got := c.AuthorizationURL(AuthorizationURLOptions{
+		Scopes: []string{ScopeBirthdate, ScopeGender},
+		State:  "csrf-token-123",
+	})
+	want := DefaultBaseURL + "/api/v2/oauth/authorize?client_id=client-123&scope=birthdate+gender&state=csrf-token-123"
+	if got != want {
+		t.Errorf("AuthorizationURL(Scopes, State) = %q, want %q", got, want)
 	}
 }
 

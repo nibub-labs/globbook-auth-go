@@ -14,8 +14,25 @@ func TestParseCallbackParams_ParsesCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCallbackParams() unexpected error: %v", err)
 	}
-	if got != "code-value" {
-		t.Errorf("ParseCallbackParams() = %q, want %q", got, "code-value")
+	if got.Code != "code-value" {
+		t.Errorf("ParseCallbackParams().Code = %q, want %q", got.Code, "code-value")
+	}
+	if got.State != "" {
+		t.Errorf("ParseCallbackParams().State = %q, want empty when no state param present", got.State)
+	}
+}
+
+func TestParseCallbackParams_ParsesState(t *testing.T) {
+	values := url.Values{}
+	values.Set("code", "code-value")
+	values.Set("state", "state-value")
+
+	got, err := ParseCallbackParams(values)
+	if err != nil {
+		t.Fatalf("ParseCallbackParams() unexpected error: %v", err)
+	}
+	if got.State != "state-value" {
+		t.Errorf("ParseCallbackParams().State = %q, want %q", got.State, "state-value")
 	}
 }
 

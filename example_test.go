@@ -21,7 +21,7 @@ func ExampleClient_AuthorizationURL() {
 		return
 	}
 
-	fmt.Println(client.AuthorizationURL())
+	fmt.Println(client.AuthorizationURL(globbookauth.AuthorizationURLOptions{}))
 	// Output: https://globbook.com/api/v2/oauth/authorize?client_id=demo-client-id
 }
 
@@ -31,12 +31,12 @@ func ExampleParseCallbackParams() {
 	values := url.Values{}
 	values.Set("code", "example-code-value")
 
-	code, err := globbookauth.ParseCallbackParams(values)
+	params, err := globbookauth.ParseCallbackParams(values)
 	if err != nil {
 		fmt.Println("error:", err)
 		return
 	}
 
-	fmt.Println(code)
+	fmt.Println(params.Code)
 	// Output: example-code-value
 }

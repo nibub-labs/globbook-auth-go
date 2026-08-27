@@ -179,9 +179,7 @@ func TestGetUserInfo_Success(t *testing.T) {
 		"bio": "",
 		"picture": null,
 		"cover_image": null,
-		"website": "",
-		"birthdate": "",
-		"gender": ""
+		"website": ""
 	}`
 
 	client := newTestClient(t, func(req *http.Request) (*http.Response, error) {
@@ -208,6 +206,60 @@ func TestGetUserInfo_Success(t *testing.T) {
 	}
 	if !info.ProfileVerified {
 		t.Error("ProfileVerified = false, want true")
+	}
+	if info.Birthdate != nil {
+		t.Errorf("Birthdate = %v, want nil when the key is omitted", *info.Birthdate)
+	}
+	if info.Gender != nil {
+		t.Errorf("Gender = %v, want nil when the key is omitted", *info.Gender)
+	}
+	if info.PhoneNumber != nil {
+		t.Errorf("PhoneNumber = %v, want nil when the key is omitted", *info.PhoneNumber)
+	}
+	if info.Address != nil {
+		t.Errorf("Address = %v, want nil when the key is omitted", *info.Address)
+	}
+}
+
+func TestGetUserInfo_RestrictedClaimsGranted(t *testing.T) {
+	body := `{
+		"sub": "md5hash",
+		"preferred_username": "janedoe",
+		"profile_verified": true,
+		"email": "jane@example.com",
+		"name": "Jane Doe",
+		"given_name": "Jane",
+		"family_name": "Doe",
+		"bio": "",
+		"picture": null,
+		"cover_image": null,
+		"website": "",
+		"birthdate": "1990-01-02",
+		"gender": "female",
+		"phone_number": "+15551234567",
+		"address": "Colombo Sri Lanka"
+	}`
+
+	client := newTestClient(t, func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(200, body), nil
+	})
+
+	info, err := client.GetUserInfo(context.Background(), "tok-xyz")
+	if err != nil {
+		t.Fatalf("GetUserInfo() unexpected error: %v", err)
+	}
+
+	if info.Birthdate == nil || *info.Birthdate != "1990-01-02" {
+		t.Errorf("Birthdate = %v, want \"1990-01-02\"", info.Birthdate)
+	}
+	if info.Gender == nil || *info.Gender != "female" {
+		t.Errorf("Gender = %v, want \"female\"", info.Gender)
+	}
+	if info.PhoneNumber == nil || *info.PhoneNumber != "+15551234567" {
+		t.Errorf("PhoneNumber = %v, want \"+15551234567\"", info.PhoneNumber)
+	}
+	if info.Address == nil || *info.Address != "Colombo Sri Lanka" {
+		t.Errorf("Address = %v, want \"Colombo Sri Lanka\"", info.Address)
 	}
 }
 

@@ -57,13 +57,13 @@ func main() {
 
 	// Step 1: send the user to Globbook's hosted consent page.
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, client.AuthorizationURL(), http.StatusFound)
+		http.Redirect(w, r, client.AuthorizationURL(globbookauth.AuthorizationURLOptions{}), http.StatusFound)
 	})
 
 	// Step 2 + 3: Globbook redirects back here with ?code=... after the
 	// user approves.
 	mux.HandleFunc("/auth/globbook/callback", func(w http.ResponseWriter, r *http.Request) {
-		code, err := globbookauth.ParseCallbackParams(r.URL.Query())
+		params, err := globbookauth.ParseCallbackParams(r.URL.Query())
 		if err != nil {
 			http.Error(w, "sign-in was cancelled or failed", http.StatusBadRequest)
 			return
@@ -71,7 +71,7 @@ func main() {
 
 		ctx := r.Context()
 
-		token, err := client.ExchangeCodeForToken(ctx, code)
+		token, err := client.ExchangeCodeForToken(ctx, params.Code)
 		if err != nil {
 			http.Error(w, "sign-in failed", http.StatusBadGateway)
 			return
@@ -122,18 +122,42 @@ Constructs a `Client`, validating that `ClientID`, `ClientSecret`, and
 `errors.Is`) if any is missing — validation happens at construction time,
 not deferred to the first API call.
 
-### `func (c *Client) AuthorizationURL() string`
+### `func (c *Client) AuthorizationURL(opts AuthorizationURLOptions) string`
 
 Builds the URL to redirect the user's browser to, to start the sign-in
 flow. Does not make an HTTP request itself — your handler is responsible
-for issuing the actual redirect (e.g. `http.Redirect`).
+for issuing the actual redirect (e.g. `http.Redirect`). Pass a zero-value
+`AuthorizationURLOptions{}` for the base profile with no CSRF-protection
+state:
 
-### `func ParseCallbackParams(values url.Values) (string, error)`
+```go
+type AuthorizationURLOptions struct {
+	Scopes []string // restricted scopes to request — see "Restricted claims" below
+	State  string    // opaque CSRF-protection value — see "CSRF protection (state)" below
+}
+```
 
-Extracts the authorization code from a callback request's query
-parameters. Framework-agnostic — pass it `(*http.Request).URL.Query()` or
-the equivalent from any router. Reads the `code` parameter. Returns
-`ErrMissingCallbackCode` if it is not present.
+```go
+url := client.AuthorizationURL(globbookauth.AuthorizationURLOptions{
+	Scopes: []string{globbookauth.ScopeBirthdate, globbookauth.ScopeGender},
+	State:  csrfToken,
+})
+http.Redirect(w, r, url, http.StatusFound)
+```
+
+### `func ParseCallbackParams(values url.Values) (CallbackParams, error)`
+
+Extracts the authorization code (and CSRF-protection state, if present)
+from a callback request's query parameters. Framework-agnostic — pass it
+`(*http.Request).URL.Query()` or the equivalent from any router. Returns
+`ErrMissingCallbackCode` if `code` is not present.
+
+```go
+type CallbackParams struct {
+	Code  string
+	State string // "" if you didn't send one — see "CSRF protection (state)" below
+}
+```
 
 ### `func (c *Client) ExchangeCodeForToken(ctx context.Context, code string) (*Token, error)`
 
@@ -168,10 +192,67 @@ type UserInfo struct {
 	Picture           *string // signed CDN URL, or nil
 	CoverImage        *string // signed CDN URL, or nil
 	Website           string
-	Birthdate         string // YYYY-MM-DD, or ""
-	Gender            string
+
+	// Restricted claims — nil unless your app is verified in the Globbook
+	// Developer Console AND the user granted the matching scope at
+	// consent time. See "Restricted claims" below.
+	Birthdate   *string // YYYY-MM-DD, or nil
+	Gender      *string
+	PhoneNumber *string
+	Address     *string // "city country" — this platform has no street address
 }
 ```
+
+### Restricted claims
+
+`Birthdate`, `Gender`, `PhoneNumber`, and `Address` are gated separately from
+the rest of the profile. Globbook only populates them — the field is `nil`
+otherwise — when **both** are true:
+
+1. Your app has been verified in the Globbook Developer Console (see
+   "Requesting verification" in the developer docs).
+2. You requested the scope via `AuthorizationURLWithScopes` when starting
+   the flow, **and** the signed-in user granted it on the consent screen —
+   requesting a scope is not the same as receiving it; the user can
+   uncheck any scope individually.
+
+An unverified app never receives these fields, regardless of what scopes it
+requests or what the user approves on consent. Always nil-check before use:
+
+```go
+if user.Birthdate != nil {
+	fmt.Println("birthdate:", *user.Birthdate)
+}
+```
+
+### CSRF protection (state)
+
+Pass `State` in `AuthorizationURLOptions` to protect against login CSRF
+(RFC 6749 §10.12): an attacker who obtains their own valid authorization
+code could otherwise trick a victim's browser into completing the
+attacker's login on the victim's session.
+
+```go
+// Before redirecting — generate an unguessable value and store it
+// (session, signed cookie) tied to the current browser session.
+csrfToken := generateRandomToken()
+saveToSession(r, "oauth_state", csrfToken)
+
+url := client.AuthorizationURL(globbookauth.AuthorizationURLOptions{State: csrfToken})
+http.Redirect(w, r, url, http.StatusFound)
+
+// In your callback handler — compare before exchanging the code.
+params, err := globbookauth.ParseCallbackParams(r.URL.Query())
+if err != nil || params.State != loadFromSession(r, "oauth_state") {
+	http.Error(w, "invalid or missing state — possible CSRF", http.StatusBadRequest)
+	return
+}
+```
+
+`State` is entirely optional and Globbook never interprets it — it's
+echoed back unchanged, per the RFC 6749 `state` parameter. Omitting it
+does not change any other behavior; this is opt-in hardening, not a
+required step.
 
 ## Error handling
 

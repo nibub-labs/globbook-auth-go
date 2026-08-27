@@ -73,11 +73,46 @@ func (c *Client) GoString() string {
 	return c.String()
 }
 
+// Restricted OIDC-style scopes you may pass in
+// [AuthorizationURLOptions.Scopes] to request restricted userinfo claims.
+// Requesting a scope only has any effect if this app has been verified in
+// the Globbook Developer Console — an unverified app's consent screen
+// never offers these regardless of what's requested, and GetUserInfo never
+// returns them either way unless the user actually grants them at consent
+// time.
+const (
+	ScopeBirthdate = "birthdate"
+	ScopeGender    = "gender"
+	ScopePhone     = "phone"
+	ScopeAddress   = "address"
+)
+
+// AuthorizationURLOptions configures [Client.AuthorizationURL].
+type AuthorizationURLOptions struct {
+	// Scopes are restricted scopes to request in addition to the base
+	// profile (see the Scope* constants), rendered as a space-delimited
+	// "scope" query parameter. Globbook's consent screen renders each
+	// requested scope as a checkbox for the user to approve or deny
+	// individually — approving a scope here is not a guarantee it will be
+	// granted, and requesting one against an unverified app has no effect
+	// at all (see the Restricted claims section of the package README).
+	Scopes []string
+
+	// State is an opaque value you generate before redirecting the user
+	// here — Globbook echoes it back unchanged in the "state" query
+	// parameter on the redirect to your RedirectURL, so
+	// [ParseCallbackParams] can hand it back to you to compare against
+	// what you stored before the redirect (RFC 6749 §10.12 CSRF
+	// protection). Globbook never interprets this value itself. Optional;
+	// leave empty to omit it.
+	State string
+}
+
 // AuthorizationURL builds the URL to redirect the user's browser to in
 // order to start the "Sign in with Globbook" flow (step 1). The caller is
 // responsible for performing the actual HTTP redirect, e.g.:
 //
-//	http.Redirect(w, r, client.AuthorizationURL(), http.StatusFound)
+//	http.Redirect(w, r, client.AuthorizationURL(globbookauth.AuthorizationURLOptions{}), http.StatusFound)
 //
 // Globbook shows its own hosted consent page at this URL; on approval it
 // redirects the browser back to this Client's configured RedirectURL with
@@ -87,8 +122,18 @@ func (c *Client) GoString() string {
 // resolved server-side by Globbook from the app's pre-registered
 // configuration, matching the real backend's /api/v2/oauth/authorize
 // contract, which only requires client_id.
-func (c *Client) AuthorizationURL() string {
+//
+// Pass a zero-value [AuthorizationURLOptions] to request only the base
+// profile with no CSRF-protection state — see the field docs on
+// [AuthorizationURLOptions] to request restricted claims and/or set state.
+func (c *Client) AuthorizationURL(opts AuthorizationURLOptions) string {
 	q := url.Values{}
 	q.Set("client_id", c.clientID)
+	if len(opts.Scopes) > 0 {
+		q.Set("scope", strings.Join(opts.Scopes, " "))
+	}
+	if opts.State != "" {
+		q.Set("state", opts.State)
+	}
 	return c.baseURL + "/api/v2/oauth/authorize?" + q.Encode()
 }

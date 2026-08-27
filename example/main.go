@@ -45,13 +45,13 @@ func main() {
 
 	// Step 1: send the user to Globbook's hosted consent page.
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, client.AuthorizationURL(), http.StatusFound)
+		http.Redirect(w, r, client.AuthorizationURL(globbookauth.AuthorizationURLOptions{}), http.StatusFound)
 	})
 
 	// Step 2 + 3: Globbook redirects back here with ?code=...; exchange
 	// it for a token, then fetch the profile.
 	mux.HandleFunc("/auth/globbook/callback", func(w http.ResponseWriter, r *http.Request) {
-		code, err := globbookauth.ParseCallbackParams(r.URL.Query())
+		params, err := globbookauth.ParseCallbackParams(r.URL.Query())
 		if err != nil {
 			http.Error(w, "sign-in was cancelled or failed: "+err.Error(), http.StatusBadRequest)
 			return
@@ -59,7 +59,7 @@ func main() {
 
 		ctx := r.Context()
 
-		token, err := client.ExchangeCodeForToken(ctx, code)
+		token, err := client.ExchangeCodeForToken(ctx, params.Code)
 		if err != nil {
 			log.Printf("token exchange failed: %v", err)
 			http.Error(w, "sign-in failed", http.StatusBadGateway)
